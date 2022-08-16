@@ -81,12 +81,9 @@ def test_read_a_real_file():
     ) as f:
         multifile_reader = MultifileReader(read_buffer=f)
 
-        print(multifile_reader.version_info)
-        print(multifile_reader.header_info)
-
         byte_count = multifile_reader.header_info["byte_count"]
-        print(f"byte_count: {byte_count}")
+        assert byte_count ==4
 
         # read the first image
-        pixel_indices, pixel_values = multifile_reader.get_image(0)
+        pixel_indices, pixel_values = multifile_reader[0]
         assert pixel_values[0] == 1
