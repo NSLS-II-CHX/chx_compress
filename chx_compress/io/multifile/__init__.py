@@ -29,15 +29,15 @@ Description:
 
      Header contains 1024 bytes storing
         version name,
-        'beam_center_x',
-        'beam_center_y',
-        'count_time',
-        'detector_distance',
-        'frame_time',
-        'incident_wavelength',
-        'x_pixel_size',
-        'y_pixel_size',
-         bytes per pixel (either 2 or 4(Default)),
+        beam_center_x,
+        beam_center_y,
+        count_time,
+        detector_distance,
+        frame_time,
+        incident_wavelength,
+        x_pixel_size,
+        y_pixel_size,
+        bytes per pixel (either 2 or 4(Default)),
         Nrows,
         Ncols,
         Rows_Begin,
@@ -47,20 +47,28 @@ Description:
 """
 
 class MultifileReader:
-    def __init__(self, read_buffer):
-        self.read_buffer = read_buffer
+    def __init__(self, read_buffer_factory):
+        self._read_buffer_factory = read_buffer_factory
+
+    def __enter__(self):
+        self._read_buffer = self._read_buffer_factory()
         self._read_header()
         self._find_image_offsets()
 
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._read_buffer.close()
+
     def _read_header(self):
-        self.read_buffer.seek(0)
+        self._read_buffer.seek(0)
 
         version_size = struct.calcsize("@16s")
-        version_data = self.read_buffer.read(version_size)
-        self.version_info = struct.unpack_from("@16s", version_data)
+        version_data = self._read_buffer.read(version_size)
+        self.version_info = struct.unpack_from("@16s", version_data)[0]
 
         header_size = struct.calcsize("@8d7I916x")
-        header_data = self.read_buffer.read(header_size)
+        header_data = self._read_buffer.read(header_size)
         self._header_values = struct.unpack_from("@8d7I916x", header_data)
 
         header_keys = (
@@ -89,10 +97,10 @@ class MultifileReader:
         #   there is no image previous to this offset
         next_image_offset = 1024
         while True:
-            self.read_buffer.seek(next_image_offset, 0)
+            self._read_buffer.seek(next_image_offset, 0)
 
             # read dlen, it is 4 bytes
-            dlen_data = self.read_buffer.read(4)
+            dlen_data = self._read_buffer.read(4)
             if len(dlen_data) == 0:
                 # there is no image data at this offset
                 #   we have reached the end of this file
@@ -126,16 +134,16 @@ class MultifileReader:
 
     def get_image_data(self, image_index):
         if 0 <= image_index < len(self._image_offsets):
-            self.read_buffer.seek(self._image_offsets[image_index])
+            self._read_buffer.seek(self._image_offsets[image_index])
             # read dlen
-            dlen_data = self.read_buffer.read(4)
+            dlen_data = self._read_buffer.read(4)
             dlen = struct.unpack("I", dlen_data)[0]
             # what is the size of the corresponding pixel index list and pixel value array
             pixel_indices_size = dlen * 4
-            pixel_indices_data = self.read_buffer.read(pixel_indices_size)
+            pixel_indices_data = self._read_buffer.read(pixel_indices_size)
             pixel_indices = struct.unpack(f"{dlen}I", pixel_indices_data)
             pixel_values_size = dlen * self.header_info["byte_count"]
-            pixel_values_data = self.read_buffer.read(pixel_values_size)
+            pixel_values_data = self._read_buffer.read(pixel_values_size)
             if self.header_info["byte_count"] == 2:
                 unpack_format = f"{dlen}h"
             elif self.header_info["byte_count"] == 4:
@@ -149,6 +157,20 @@ class MultifileReader:
             raise ValueError(
                 f"image_index: {image_index} is not in the range [0, {len(self._image_offsets)})"
             )
+
+
+def multifile_reader(filepath, mode="rb"):
+    """A convenience function to create a MultifileReader that reads from a file.
+
+    Parameters
+    ----------
+    filepath : str
+        path for the multifile
+    mode : str
+        optional mode to open the file, default is "rb"
+
+    """
+    return MultifileReader(lambda: open(filepath, mode=mode))
 
 
 class MultifileWriter:
@@ -193,7 +215,7 @@ class MultifileWriter:
         struct.pack_into(
             "@8d7I916x",
             self._header_buffer,
-            16,
+            struct.calcsize("@16s"),
             beam_center_x,
             beam_center_y,
             count_time,
