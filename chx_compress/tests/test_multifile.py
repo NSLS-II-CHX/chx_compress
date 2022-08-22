@@ -177,7 +177,7 @@ def test_read_a_real_file():
         pixel_indices, pixel_values = mfr[0]
         assert pixel_values[0] == 1
 
-        image_array = np.zeros(mfr.header_info["nrows"], mfr.header_info["ncols"])
+        image_array = np.zeros((mfr.header_info["nrows"], mfr.header_info["ncols"]))
         for pixel_indices, pixel_values in mfr:
             image_array[:] = 0
             image_array[pixel_indices] = pixel_values
