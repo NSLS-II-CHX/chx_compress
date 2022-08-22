@@ -166,6 +166,10 @@ def test_write_read(byte_count, image_count):
     reason="compressed data files are not available",
 )
 def test_read_a_real_file():
+    """ Read a real file.
+
+    This test may take up to 3 minutes.
+    """
     with multifile_reader(
         "/nsls2/data/chx/legacy/Compressed_Data/uid_0014eb14-9373-4a6c-915a-041f5cc6da96.cmp",
     ) as mfr:
@@ -177,6 +181,7 @@ def test_read_a_real_file():
         pixel_indices, pixel_values = mfr[0]
         assert pixel_values[0] == 1
 
+        # read all the images
         image_array = np.zeros((mfr.header_info["nrows"], mfr.header_info["ncols"]))
         for pixel_indices, pixel_values in mfr:
             image_array[:] = 0

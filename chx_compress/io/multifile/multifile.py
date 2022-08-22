@@ -85,7 +85,7 @@ class MultifileReader:
         This information is read before images are accessed.
 
         This method is intended for interactive use
-        as well as in __enter__.
+        as well as by __enter__.
         """
         self._read_buffer = self._read_buffer_factory()
         self._read_header()
@@ -95,7 +95,7 @@ class MultifileReader:
         """Close the read buffer.
 
         This method is intended for interactive use
-        as well as clean up by __exit__.
+        as well as by __exit__.
         """
         self._read_buffer.close()
 
@@ -117,6 +117,8 @@ class MultifileReader:
         self.close()
 
     def _read_header(self):
+        """ Read the header data and store it in self.header_info.
+        """
         self._read_buffer.seek(0)
 
         version_size = struct.calcsize("@16s")
@@ -148,6 +150,10 @@ class MultifileReader:
         self.header_info = dict(zip(header_keys, self._header_values))
 
     def _find_image_offsets(self):
+        """ Find all image offsets in a multifile.
+
+        This step must be completed before images can be read.
+        """
         image_offsets = []
         # this is the starting point for the image offset search
         #   there is no image previous to this offset
@@ -183,6 +189,20 @@ class MultifileReader:
         self._image_offsets = tuple(image_offsets)
 
     def get_image_data(self, image_index):
+        """Read and return image data by image index.
+
+        Parameters
+        ----------
+        image_index : integer
+            a valid image index, 0 <= image_index < len(self)
+
+        Returns
+        -------
+        pixel_indices : list of numbers
+            list of "flat" pixel indices for one image
+        pixel_values : list of numbers
+            list of non-zero pixel values corresponding to pixel_indices
+        """
         if len(self._image_offsets) == 0:
             raise ValueError("multifile has no images")
         elif 0 <= image_index < len(self._image_offsets):
@@ -221,6 +241,9 @@ def multifile_reader(filepath, mode="rb"):
     mode : str
         optional mode to open the file, default is "rb"
 
+    Returns
+    -------
+    a MultifileReader object
     """
     return MultifileReader(lambda: open(filepath, mode=mode))
 
@@ -300,7 +323,18 @@ class MultifileWriter:
         self._write_buffer.close()
 
     def write_image(self, pixel_indices, pixel_values):
-        # reference: https://github.com/NSLS-II/pyCHX/blob/2b36ac312f5d67fac8b6b4f6b8658ab589dd6dc9/pyCHX/chx_compress.py#L326
+        """Write one image.
+
+        Parameters
+        ----------
+        pixel_indices : list of integers
+            list of "flat" pixel indices
+
+        pixel_values : list of numbers
+            list of pixel values corresponding to the pixel_indices
+
+        reference: https://github.com/NSLS-II/pyCHX/blob/2b36ac312f5d67fac8b6b4f6b8658ab589dd6dc9/pyCHX/chx_compress.py#L326
+        """
         if len(pixel_indices) == len(pixel_values):
             data_length = len(pixel_indices)
             self._write_buffer.write(struct.pack("@I", data_length))
@@ -323,6 +357,10 @@ def multifile_writer(filepath, **kwargs):
         path for the multifile
     kwargs :
         intended for the multifile header data
+
+    Return
+    ------
+    a MultifileWriter object
     """
 
     def file_factory():
