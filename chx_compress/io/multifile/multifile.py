@@ -6,13 +6,38 @@ import numpy as np
 
 
 """
-Description:
+    MultifileReader and MultifileWriter provide direct
+    and contextmanager interfaces for reading and writing
+    the Mark Sutton "multifile" format from and to generic
+    buffers.
 
-    This is code that Mark wrote to open the multifile format
-    in compressed mode, translated to python.
-    This seems to work for DALSA, FCCD and EIGER in compressed mode.
-    It should be included in the respective detector.i files
-    Currently, this refers to the compression mode being '6'
+    multifile_reader and multifile_writer are
+    convenience functions that build the corresponding
+    objects for reading and writing files.
+
+    direct usage:
+
+        mfw = multifile_writer("path/to/a/file", **required_header_info)
+        mfw.write_image(pixel_indices=[1, 3, 5], pixel_values=[1, 2, 1])
+        mfw.close()
+
+        mfr = multifile_reader("path/to/a/file")
+        mfr.read_header_and_offsets()
+        image_count = len(mfr)
+        pixel_indices, pixel_values = mfr[0]
+        mfr.close()
+
+    context manager usage:
+        with multifile_writer("path/to/a/file", **required_header_info) as mfw:
+            mfw.write_image(pixel_indices=[1, 3, 5], pixel_values=[1, 2, 1])
+        
+        with multifile_reader("path/to/a/file") as mfr:
+            image_array = np.zeros(mfr.header_info["nrows"], header_info["ncols"])
+            for pixel_indices, pixel_values in mfr:
+                image_array[:] = 0
+                numpy.put(image_array, pixel_indices, pixel_values)
+
+
     Each file is image descriptor files chunked together as follows:
             Header (1024 bytes)
     |--------------IMG N begin--------------|
@@ -48,13 +73,14 @@ Description:
         Cols_End,
 """
 
+
 class MultifileReader:
     def __init__(self, read_buffer_factory):
         self._read_buffer_factory = read_buffer_factory
         self._image_offsets = None
 
     def read_header_and_offsets(self):
-        """ Read header and image offsets.
+        """Read header and image offsets.
 
         This information is read before images are accessed.
 
@@ -66,7 +92,7 @@ class MultifileReader:
         self._find_image_offsets()
 
     def close(self):
-        """ Close the read buffer.
+        """Close the read buffer.
 
         This method is intended for interactive use
         as well as clean up by __exit__.
@@ -260,11 +286,17 @@ class MultifileWriter:
         )
 
     def __enter__(self):
-        self._write_buffer = self._write_buffer_factory()
-        self._write_buffer.write(self._header_buffer)
+        self.write_header()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def write_header(self):
+        self._write_buffer = self._write_buffer_factory()
+        self._write_buffer.write(self._header_buffer)
+
+    def close(self):
         self._write_buffer.close()
 
     def write_image(self, pixel_indices, pixel_values):
@@ -334,51 +366,51 @@ def multifile_writer(filepath, **kwargs):
 
 # TODO : split into RO and RW classes
 class MultifileAPS:
-    '''
+    """
     Re-write multifile from scratch.
 
-    '''
+    """
+
     HEADER_SIZE = 1024
 
-    def __init__(self, filename, mode='rb', nbytes=2):
-        '''
-            Prepare a file for reading or writing.
-            mode : either 'rb' or 'wb'
-            numimgs: num images
-        '''
-        if mode != 'rb' and mode != 'wb':
-            raise ValueError("Error, mode must be 'rb' or 'wb'"
-                             "got : {}".format(mode))
+    def __init__(self, filename, mode="rb", nbytes=2):
+        """
+        Prepare a file for reading or writing.
+        mode : either 'rb' or 'wb'
+        numimgs: num images
+        """
+        if mode != "rb" and mode != "wb":
+            raise ValueError("Error, mode must be 'rb' or 'wb'" "got : {}".format(mode))
         self._filename = filename
         self._mode = mode
 
         self._nbytes = nbytes
         if nbytes == 2:
-            self._dtype = '<i2'
+            self._dtype = "<i2"
         elif nbytes == 4:
-            self._dtype = '<i4'
+            self._dtype = "<i4"
 
         # open the file descriptor
         # create a memmap
-        if mode == 'rb':
+        if mode == "rb":
             # self._fd = np.memmap(filename, dtype='c')
             self._fd = open(filename, "rb")
-        elif mode == 'wb':
+        elif mode == "wb":
             self._fd = open(filename, "wb")
         # frame number currently on
         self.index()
         self.beg = 0
-        self.end = self.Nframes-1
+        self.end = self.Nframes - 1
 
         # these are only necessary for writing
         hdr = self._read_header(0)
-        self._rows = int(hdr['rows'])
-        self._cols = int(hdr['cols'])
+        self._rows = int(hdr["rows"])
+        self._cols = int(hdr["cols"])
 
     def rdframe(self, n):
         # read header then image
         pos, vals = self._read_raw(n)
-        img = np.zeros((self._rows*self._cols,))
+        img = np.zeros((self._rows * self._cols,))
         img[pos] = vals
         return img.reshape((self._rows, self._cols))
 
@@ -387,10 +419,10 @@ class MultifileAPS:
         return self._read_raw(n)
 
     def index(self):
-        ''' Index the file by reading all frame_indexes.
-            For faster later access.
-        '''
-        print('Indexing file...')
+        """Index the file by reading all frame_indexes.
+        For faster later access.
+        """
+        print("Indexing file...")
         t1 = time.time()
         cur = 0
         file_bytes = len(self._fd)
@@ -400,68 +432,70 @@ class MultifileAPS:
             self.frame_indexes.append(cur)
             # first get dlen, 4 bytes
 
-            self._fd.seek(cur+152, os.SEEK_SET)
+            self._fd.seek(cur + 152, os.SEEK_SET)
             # dlen = np.frombuffer(self._fd[cur+152:cur+156], dtype="<u4")[0]
             dlen = np.fromfile(self._fd, dtype=np.uint32, count=1)[0]
             print("found {} bytes".format(dlen))
             # self.nbytes is number of bytes per val
-            cur += 1024 + dlen*(4+self._nbytes)
+            cur += 1024 + dlen * (4 + self._nbytes)
             # break
 
         self.Nframes = len(self.frame_indexes)
         t2 = time.time()
-        print("Done. Took {} secs for {} frames".format(t2-t1, self.Nframes))
+        print("Done. Took {} secs for {} frames".format(t2 - t1, self.Nframes))
 
     def _read_header(self, n):
-        ''' Read header from current seek position.'''
+        """Read header from current seek position."""
         if n > self.Nframes:
-            raise KeyError("Error, only {} frames, asked for {}"
-                           .format(self.Nframes, n))
+            raise KeyError(
+                "Error, only {} frames, asked for {}".format(self.Nframes, n)
+            )
         # read in bytes
         cur = self.frame_indexes[n]
         # header_raw = self._fd[cur:cur + self.HEADER_SIZE]
         header = dict()
         self._fd.seek(cur + 108, os.SEEK_SET)
-        header['rows'] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
+        header["rows"] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
         self._fd.seek(cur + 112, os.SEEK_SET)
-        header['cols'] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
+        header["cols"] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
         self._fd.seek(cur + 116, os.SEEK_SET)
-        header['nbytes'] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
+        header["nbytes"] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
         self._fd.seek(cur + 152, os.SEEK_SET)
-        header['dlen'] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
+        header["dlen"] = np.fromfile(self._fd, dtype=self._dtype, count=1)[0]
 
-        self._dlen = header['dlen']
-        self._nbytes = header['nbytes']
+        self._dlen = header["dlen"]
+        self._nbytes = header["nbytes"]
 
         return header
 
     def _read_raw(self, n):
-        ''' Read from raw.
-            Reads from current cursor in file.
-        '''
+        """Read from raw.
+        Reads from current cursor in file.
+        """
         if n > self.Nframes:
-            raise KeyError("Error, only {} frames, asked for {}"
-                           .format(self.Nframes, n))
+            raise KeyError(
+                "Error, only {} frames, asked for {}".format(self.Nframes, n)
+            )
         cur = self.frame_indexes[n] + 1024
-        dlen = self._read_header(n)['dlen']
+        dlen = self._read_header(n)["dlen"]
 
         # pos = self._fd[cur: cur+dlen*4]
         self._fd.seek(cur, os.SEEK_SET)
         pos = np.fromfile(self._fd, dtype=np.uint32, count=dlen)
-        cur += dlen*4
+        cur += dlen * 4
         # pos = np.frombuffer(pos, dtype='<i4')
 
         # TODO: 2-> nbytes
         vals = np.fromfile(self._fd, dtype=self._dtype, count=dlen)
         # vals = self._fd[cur: cur+dlen*2]
         # not necessary
-        cur += dlen*2
+        cur += dlen * 2
         # vals = np.frombuffer(vals, dtype=self._dtype)
 
         return pos, vals
 
     def _write_header(self, dlen, rows, cols):
-        ''' Write header at current position.'''
+        """Write header at current position."""
         self._rows = rows
         self._cols = cols
         self._dlen = dlen
@@ -476,7 +510,7 @@ class MultifileAPS:
         self._fd.write(header)
 
     def write_raw(self, pos, vals):
-        ''' Write a raw set of values for the next chunk.'''
+        """Write a raw set of values for the next chunk."""
         rows = self._rows
         cols = self._cols
         dlen = len(pos)
@@ -490,52 +524,52 @@ class MultifileAPS:
 
 # TODO : split into RO and RW classes
 class MultifileBNL:
-    '''
+    """
     Re-write multifile from scratch.
 
-    '''
+    """
+
     HEADER_SIZE = 1024
 
-    def __init__(self, filename, mode='rb', version=2):
-        '''
-            Prepare a file for reading or writing.
-            mode : either 'rb' or 'wb'
+    def __init__(self, filename, mode="rb", version=2):
+        """
+        Prepare a file for reading or writing.
+        mode : either 'rb' or 'wb'
 
-            version : int, optional
-                version 1 is old bnl format
-                version 2 is the new format
-        '''
+        version : int, optional
+            version 1 is old bnl format
+            version 2 is the new format
+        """
         self._version = version
-        if mode == 'wb':
+        if mode == "wb":
             raise ValueError("Write mode 'wb' not supported yet")
 
-        if mode != 'rb' and mode != 'wb':
-            raise ValueError("Error, mode must be 'rb' or 'wb'"
-                             "got : {}".format(mode))
+        if mode != "rb" and mode != "wb":
+            raise ValueError("Error, mode must be 'rb' or 'wb'" "got : {}".format(mode))
 
         self._filename = filename
         self._mode = mode
 
         # open the file descriptor
         # create a memmap
-        if mode == 'rb':
+        if mode == "rb":
             # self._fd = np.memmap(filename, dtype='c')
             self._fd = open(filename, "rb")
-        elif mode == 'wb':
+        elif mode == "wb":
             self._fd = open(filename, "wb")
 
         # these are only necessary for writing
         self.md = self._read_main_header()
-        self._rows = int(self.md['nrows'])
-        self._cols = int(self.md['ncols'])
+        self._rows = int(self.md["nrows"])
+        self._cols = int(self.md["ncols"])
 
         # some initialization stuff
-        self.nbytes = self.md['bytes']
-        if (self.nbytes == 2):
+        self.nbytes = self.md["bytes"]
+        if self.nbytes == 2:
             self.valtype = np.uint16
-        elif (self.nbytes == 4):
+        elif self.nbytes == 4:
             self.valtype = np.uint32
-        elif (self.nbytes == 8):
+        elif self.nbytes == 8:
             self.valtype = np.float64
 
         # frame number currently on
@@ -545,10 +579,10 @@ class MultifileBNL:
         return self.Nframes
 
     def index(self):
-        ''' Index the file by reading all frame_indexes.
-            For faster later access.
-        '''
-        print('Indexing file...')
+        """Index the file by reading all frame_indexes.
+        For faster later access.
+        """
+        print("Indexing file...")
         t1 = time.time()
         cur = self.HEADER_SIZE
         file_bytes = os.path.getsize(self._filename)
@@ -565,47 +599,61 @@ class MultifileBNL:
             dlen = np.fromfile(self._fd, dtype=np.uint32, count=1)[0]
             # print("found {} bytes".format(dlen))
             # self.nbytes is number of bytes per val
-            cur += 4 + dlen*(4+self.nbytes)
+            cur += 4 + dlen * (4 + self.nbytes)
             # break
 
         self.Nframes = len(self.frame_indexes)
         t2 = time.time()
-        print("Done. Took {} secs for {} frames".format(t2-t1, self.Nframes))
+        print("Done. Took {} secs for {} frames".format(t2 - t1, self.Nframes))
 
     def _read_main_header(self):
-        ''' Read header from current seek position.
+        """Read header from current seek position.
 
-            Extracting the header was written by Yugang Zhang. This is BNL's
-            format.
-            1024 byte header +
-            4 byte dlen + (4 + nbytes)*dlen bytes
-            etc...
-            Format:
-                unsigned int beam_center_x;
-                unsigned int beam_center_y;
-        '''
+        Extracting the header was written by Yugang Zhang. This is BNL's
+        format.
+        1024 byte header +
+        4 byte dlen + (4 + nbytes)*dlen bytes
+        etc...
+        Format:
+            unsigned int beam_center_x;
+            unsigned int beam_center_y;
+        """
         # read in bytes
         # header is always from zero
         # header_raw = self._fd[cur:cur + self.HEADER_SIZE]
-        ms_keys = ['beam_center_x', 'beam_center_y', 'count_time',
-                   'detector_distance', 'frame_time', 'incident_wavelength',
-                   'x_pixel_size', 'y_pixel_size', 'bytes', 'nrows', 'ncols',
-                   'rows_begin', 'rows_end', 'cols_begin', 'cols_end']
+        ms_keys = [
+            "beam_center_x",
+            "beam_center_y",
+            "count_time",
+            "detector_distance",
+            "frame_time",
+            "incident_wavelength",
+            "x_pixel_size",
+            "y_pixel_size",
+            "bytes",
+            "nrows",
+            "ncols",
+            "rows_begin",
+            "rows_end",
+            "cols_begin",
+            "cols_end",
+        ]
 
         self._fd.seek(0, os.SEEK_SET)
         br = self._fd.read(1024)
         # magic = struct.unpack('@16s', br[:16])
-        md_temp = struct.unpack('@8d7I916x', br[16:])
+        md_temp = struct.unpack("@8d7I916x", br[16:])
         self.md = dict(zip(ms_keys, md_temp))
         return self.md
 
     def _read_raw(self, n):
-        ''' Read from raw.
-            Reads from current cursor in file.
-        '''
+        """Read from raw.
+        Reads from current cursor in file.
+        """
         if n > self.Nframes:
-            raise KeyError("Error, only {} frames, asked for {}"
-                           .format(self.Nframes, n))
+            raise KeyError(
+                "Error, only {} frames, asked for {}".format(self.Nframes, n)
+            )
         # dlen is 4 bytes
         cur = self.frame_indexes[n]
         # dlen = np.frombuffer(self._fd[cur:cur+4], dtype="<u4")[0]
@@ -618,7 +666,7 @@ class MultifileBNL:
         # self._fd.seek(cur,os.SEEK_SET)
         pos = np.fromfile(self._fd, dtype=np.uint32, count=dlen)
 
-        cur += dlen*4
+        cur += dlen * 4
         # TODO: 2-> nbytes
         # vals = self._fd[cur: cur+dlen*self.nbytes]
         # vals = np.frombuffer(vals, dtype=self.valtype)
@@ -630,7 +678,7 @@ class MultifileBNL:
     def rdframe(self, n):
         # read header then image
         pos, vals = self._read_raw(n)
-        img = np.zeros((self._rows*self._cols,))
+        img = np.zeros((self._rows * self._cols,))
         img[pos] = vals
         # trying to retain backwards compatibility of the old file
         if self._version > 1:
@@ -649,7 +697,7 @@ class MultifileBNLCustom(MultifileBNL):
         super().__init__(filename, **kwargs)
         self.beg = beg
         if end is None:
-            end = self.Nframes-1
+            end = self.Nframes - 1
         self.end = end
 
     def rdframe(self, n):

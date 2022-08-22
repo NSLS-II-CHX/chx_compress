@@ -13,9 +13,7 @@ from chx_compress.io.multifile.multifile import (
 )
 
 
-@pytest.mark.parametrize(
-    "byte_count", (2, 4, 8)
-)
+@pytest.mark.parametrize("byte_count", (2, 4, 8))
 def test_multifile_with_no_images(byte_count):
 
     header_info = {
@@ -39,6 +37,8 @@ def test_multifile_with_no_images(byte_count):
     with MultifileWriter(
         lambda: BufferedRandom(BytesIO()), **header_info
     ) as multifile_writer:
+
+        # at this point the multifile header has been written
 
         with MultifileReader(
             lambda: multifile_writer._write_buffer
@@ -67,7 +67,7 @@ def test_write_read(byte_count, image_count):
     Parameters
     ----------
     byte_count : integer
-        number of bytes used to store pixel values, only 2, 4, and 8 are allowed
+        number of bytes used to store pixel values; only 2, 4, and 8 are allowed
     image_count : integer
         number of images to write into the multifile
     """
@@ -112,7 +112,6 @@ def test_write_read(byte_count, image_count):
         assert not multifile_writer._write_buffer.closed
     assert multifile_writer._write_buffer.closed
 
-
     # test context manager usage
     with MultifileReader(
         lambda: BufferedRandom(BytesIO(initial_bytes=the_data_we_wrote))
@@ -122,10 +121,20 @@ def test_write_read(byte_count, image_count):
         assert len(multifile_reader) == image_count
 
         # test iteration
-        for image_i, (read_pixel_indices, read_pixel_values) in enumerate(multifile_reader):
+        image_array = np.zeros(
+            (
+                multifile_reader.header_info["nrows"],
+                multifile_reader.header_info["ncols"],
+            )
+        )
+        for image_i, (read_pixel_indices, read_pixel_values) in enumerate(
+            multifile_reader
+        ):
             written_pixel_indices, written_pixel_values = written_data[image_i]
             assert np.array_equal(written_pixel_indices, read_pixel_indices)
             assert np.array_equal(written_pixel_values, read_pixel_values)
+            image_array[:] = 0
+            np.put(image_array, read_pixel_indices, read_pixel_values)
 
         assert not multifile_reader._read_buffer.closed
     assert multifile_reader._read_buffer.closed
@@ -151,6 +160,7 @@ def test_write_read(byte_count, image_count):
 
     assert multifile_reader._read_buffer.closed
 
+
 @pytest.mark.skipif(
     not os.path.exists("/nsls2/data/chx/legacy/Compressed_Data"),
     reason="compressed data files are not available",
@@ -166,3 +176,8 @@ def test_read_a_real_file():
         # read the first image
         pixel_indices, pixel_values = mfr[0]
         assert pixel_values[0] == 1
+
+        image_array = np.zeros(mfr.header_info["nrows"], mfr.header_info["ncols"])
+        for pixel_indices, pixel_values in mfr:
+            image_array[:] = 0
+            image_array[pixel_indices] = pixel_values
