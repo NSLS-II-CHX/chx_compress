@@ -180,4 +180,4 @@ def test_read_a_real_file():
         image_array = np.zeros((mfr.header_info["nrows"], mfr.header_info["ncols"]))
         for pixel_indices, pixel_values in mfr:
             image_array[:] = 0
-            image_array[pixel_indices] = pixel_values
+            np.put(image_array, pixel_indices, pixel_values)
