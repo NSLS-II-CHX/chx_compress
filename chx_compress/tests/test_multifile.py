@@ -35,13 +35,13 @@ def test_multifile_with_no_images(byte_count):
     }
 
     with MultifileWriter(
-        lambda: BufferedRandom(BytesIO()), **header_info
+        BufferedRandom(BytesIO()), **header_info
     ) as multifile_writer:
 
         # at this point the multifile header has been written
 
         with MultifileReader(
-            lambda: multifile_writer._write_buffer
+            multifile_writer._write_buffer
         ) as multifile_reader:
             assert multifile_reader.version_info == b"Version-COMP0001"
             assert multifile_reader.header_info == header_info
@@ -92,7 +92,7 @@ def test_write_read(byte_count, image_count):
     }
 
     with MultifileWriter(
-        lambda: BufferedRandom(BytesIO()), **header_info
+        BufferedRandom(BytesIO()), **header_info
     ) as multifile_writer:
 
         written_data = []
@@ -114,7 +114,7 @@ def test_write_read(byte_count, image_count):
 
     # test context manager usage
     with MultifileReader(
-        lambda: BufferedRandom(BytesIO(initial_bytes=the_data_we_wrote))
+        BufferedRandom(BytesIO(initial_bytes=the_data_we_wrote))
     ) as multifile_reader:
         assert multifile_reader.version_info == b"Version-COMP0001"
         assert multifile_reader.header_info == header_info
@@ -141,7 +141,7 @@ def test_write_read(byte_count, image_count):
 
     # test direct usage
     multifile_reader = MultifileReader(
-        lambda: BufferedRandom(BytesIO(initial_bytes=the_data_we_wrote))
+        BufferedRandom(BytesIO(initial_bytes=the_data_we_wrote))
     )
     multifile_reader.read_header_and_offsets()
     assert multifile_reader.version_info == b"Version-COMP0001"

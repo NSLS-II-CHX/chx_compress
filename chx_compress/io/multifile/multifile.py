@@ -7,11 +7,11 @@ import numpy as np
 
 """
     MultifileReader and MultifileWriter provide direct
-    and contextmanager interfaces for reading and writing
+    and context manager interfaces for reading and writing
     the Mark Sutton "multifile" format from and to generic
     buffers.
 
-    multifile_reader and multifile_writer are
+    multifile_reader() and multifile_writer() are
     convenience functions that build the corresponding
     objects for reading and writing files.
 
@@ -28,6 +28,7 @@ import numpy as np
         mfr.close()
 
     context manager usage:
+
         with multifile_writer("path/to/a/file", **required_header_info) as mfw:
             mfw.write_image(pixel_indices=[1, 3, 5], pixel_values=[1, 2, 1])
         
@@ -75,8 +76,8 @@ import numpy as np
 
 
 class MultifileReader:
-    def __init__(self, read_buffer_factory):
-        self._read_buffer_factory = read_buffer_factory
+    def __init__(self, read_buffer):
+        self._read_buffer = read_buffer
         self._image_offsets = None
 
     def read_header_and_offsets(self):
@@ -87,7 +88,6 @@ class MultifileReader:
         This method is intended for interactive use
         as well as by __enter__.
         """
-        self._read_buffer = self._read_buffer_factory()
         self._read_header()
         self._find_image_offsets()
 
@@ -245,13 +245,13 @@ def multifile_reader(filepath, mode="rb"):
     -------
     a MultifileReader object
     """
-    return MultifileReader(lambda: open(filepath, mode=mode))
+    return MultifileReader(read_buffer=open(filepath, mode=mode))
 
 
 class MultifileWriter:
     def __init__(
         self,
-        write_buffer_factory,
+        write_buffer,
         beam_center_x,
         beam_center_y,
         count_time,
@@ -269,7 +269,7 @@ class MultifileWriter:
         cols_end,
         pixel_value_format=None,
     ):
-        self._write_buffer_factory = write_buffer_factory
+        self._write_buffer = write_buffer
         self._header_buffer = bytearray(1024)
 
         # pixel data format is determined by "byte_count"
@@ -316,7 +316,6 @@ class MultifileWriter:
         self.close()
 
     def write_header(self):
-        self._write_buffer = self._write_buffer_factory()
         self._write_buffer.write(self._header_buffer)
 
     def close(self):
@@ -363,10 +362,7 @@ def multifile_writer(filepath, **kwargs):
     a MultifileWriter object
     """
 
-    def file_factory():
-        return open(filepath, "wb")
-
-    return MultifileWriter(write_buffer_factory=file_factory, **kwargs)
+    return MultifileWriter(open(filepath, "wb"), **kwargs)
 
 
 """    Description:
