@@ -1,3 +1,1 @@
-# the eiger-io library
-eiger-io
 tqdm
