@@ -117,8 +117,7 @@ class MultifileReader:
         self.close()
 
     def _read_header(self):
-        """ Read the header data and store it in self.header_info.
-        """
+        """Read the header data and store it in self.header_info."""
         self._read_buffer.seek(0)
 
         version_size = struct.calcsize("@16s")
@@ -150,7 +149,7 @@ class MultifileReader:
         self.header_info = dict(zip(header_keys, self._header_values))
 
     def _find_image_offsets(self):
-        """ Find all image offsets in a multifile.
+        """Find all image offsets in a multifile.
 
         This step must be completed before images can be read.
         """
@@ -363,6 +362,25 @@ def multifile_writer(filepath, **kwargs):
     """
 
     return MultifileWriter(open(filepath, "wb"), **kwargs)
+
+
+def write_sparse_coo_to_multifile(sparse_coo_array, multifile_writer):
+    """
+    Read image data from a sparse.COO array and write it to a multifile.
+
+    Parameters
+    ----------
+      sparse_coo_array: sparse.COO
+        FRAMESxROWSxCOLUMNS source array of detector data
+
+      multifile_writer: MultifileWriter
+        multifile target for detector data
+    """
+    for sparse_image in sparse_coo_array:
+        sparse_image_linear_indices = np.ravel_multi_index(
+            sparse_image.coords, sparse_image.shape
+        )
+        multifile_writer.write_image(sparse_image_linear_indices, sparse_image.data)
 
 
 """    Description:
