@@ -22,7 +22,6 @@ import numpy as np
         mfw.close()
 
         mfr = multifile_reader("path/to/a/file")
-        mfr.read_header_and_offsets()
         image_count = len(mfr)
         pixel_indices, pixel_values = mfr[0]
         mfr.close()
@@ -79,8 +78,9 @@ class MultifileReader:
     def __init__(self, read_buffer):
         self._read_buffer = read_buffer
         self._image_offsets = None
+        self._read_header_and_offsets()
 
-    def read_header_and_offsets(self):
+    def _read_header_and_offsets(self):
         """Read header and image offsets.
 
         This information is read before images are accessed.
@@ -110,7 +110,6 @@ class MultifileReader:
             yield self.get_image_data(image_index=image_i)
 
     def __enter__(self):
-        self.read_header_and_offsets()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -242,9 +241,42 @@ def multifile_reader(filepath, mode="rb"):
 
     Returns
     -------
-    a MultifileReader object
+    a MultifileReader object which must be explicitly closed
+    by calling MultifileReader.close()
     """
-    return MultifileReader(read_buffer=open(filepath, mode=mode))
+    mfr = MultifileReader(read_buffer=open(filepath, mode=mode))
+
+    return mfr
+
+
+def get_dense_array(multifile_reader):
+    """A convenience function to build a dense array of image data from a MultifileReader.
+
+    Parameters
+    ----------
+    multifile_reader : MultifileReader
+
+    Return
+    ------
+    dense_array : ndarray
+      dense array representation of the multifile data
+
+    """
+
+    frame_count = len(multifile_reader)
+    row_count = multifile_reader.header_info["nrows"]
+    column_count = multifile_reader.header_info["ncols"]
+
+    dense_array = np.zeros((frame_count, row_count, column_count))
+
+    for image_i, (image_pixel_indices, image_pixel_values) in enumerate(
+        multifile_reader
+    ):
+        np.put(
+            dense_array[image_i], image_pixel_indices, image_pixel_values
+        )
+
+    return dense_array
 
 
 class MultifileWriter:
