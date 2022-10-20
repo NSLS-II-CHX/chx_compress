@@ -249,6 +249,30 @@ def multifile_reader(filepath, mode="rb"):
     return mfr
 
 
+def get_dense_image(multifile_reader, image_index, target_image_array):
+    """A convenience function to build a dense image array.
+
+    Parameters
+    ----------
+    multifile_reader : MultifileReader
+
+    image_index : int
+      index of the image to return
+
+    target_image_array : ndarray
+      dense array for image data, will be overwritten
+
+    Return
+    ------
+    dense_array : ndarray
+      dense array representation of the multifile data
+
+     """
+    target_image_array[:] = 0
+    np.put(target_image_array, *multifile_reader[image_index])
+    return target_image_array
+
+
 def get_dense_array(multifile_reader):
     """A convenience function to build a dense array of image data from a MultifileReader.
 
