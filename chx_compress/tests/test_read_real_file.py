@@ -5,6 +5,7 @@ import pytest
 import numpy as np
 
 from chx_compress.io.multifile.multifile import get_dense_image, multifile_reader
+from chx_compress.io.multifile.multifile_yg import Multifile
 
 
 @pytest.mark.skipif(
