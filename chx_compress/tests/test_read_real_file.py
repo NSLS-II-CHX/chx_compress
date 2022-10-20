@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+import numpy as np
+
 from chx_compress.io.multifile.multifile import multifile_reader
 
 
