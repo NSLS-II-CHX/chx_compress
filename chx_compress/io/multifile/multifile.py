@@ -249,12 +249,43 @@ def multifile_reader(filepath, mode="rb"):
     return mfr
 
 
-def get_dense_array(multifile_reader):
+def get_dense_image(multifile_reader, image_index, target_image_array):
+    """A convenience function to build a dense image array.
+
+    The target image array should have shape (rows, columns) or
+    (columns, rows) depending on the file being read. The latter
+    is standard practice at CHX.
+
+    Parameters
+    ----------
+    multifile_reader : MultifileReader
+
+    image_index : int
+      index of the image to return
+
+    target_image_array : ndarray
+      (rows, columns) or (columns, rows) array for image data, will be overwritten
+
+    Return
+    ------
+    dense_array : ndarray
+      dense array representation of the multifile data
+
+     """
+    target_image_array[:] = 0
+    np.put(target_image_array, *multifile_reader[image_index])
+    return target_image_array
+
+
+def get_dense_array(multifile_reader, image_shape):
     """A convenience function to build a dense array of image data from a MultifileReader.
 
     Parameters
     ----------
     multifile_reader : MultifileReader
+
+    image_shape : (int, int)
+      (rows, columns) or (columns, rows)
 
     Return
     ------
@@ -267,7 +298,7 @@ def get_dense_array(multifile_reader):
     row_count = multifile_reader.header_info["nrows"]
     column_count = multifile_reader.header_info["ncols"]
 
-    dense_array = np.zeros((frame_count, row_count, column_count))
+    dense_array = np.zeros((frame_count, *image_shape))
 
     for image_i, (image_pixel_indices, image_pixel_values) in enumerate(
         multifile_reader

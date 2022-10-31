@@ -16,6 +16,13 @@ def test_get_dense_array(multifile_bytes_factory, byte_count):
     with MultifileReader(
         read_buffer=io.BufferedRandom(io.BytesIO(initial_bytes=multifile_bytes))
     ) as multifile_reader:
-        dense_data = get_dense_array(multifile_reader=multifile_reader)
+        
+        nrows = multifile_reader.header_info["nrows"]
+        ncols = multifile_reader.header_info["ncols"]
+
+        dense_data = get_dense_array(
+            multifile_reader=multifile_reader,
+            image_shape=(nrows, ncols)
+        )
 
         assert np.array_equal(dense_data, sparse_data.todense())
